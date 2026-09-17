@@ -1,0 +1,31 @@
+# ============================================
+# 阶段一：构建阶段（在 x86 云端模拟 armv7 编译）
+# ============================================
+FROM --platform=linux/arm/v7 arm32v7/node:16-bullseye AS builder
+
+WORKDIR /app
+
+# 先复制依赖清单，利用 Docker 层缓存
+COPY package*.json ./
+RUN npm install
+
+# 复制源码并执行编译，生成 dist 目录
+COPY . .
+RUN npm run dist
+
+# ============================================
+# 阶段二：运行阶段（只包含运行时所需文件）
+# ============================================
+FROM --platform=linux/arm/v7 arm32v7/node:16-bullseye-slim
+
+WORKDIR /app
+
+# 只从构建阶段拷贝必要产物
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+
+# 关键：直接启动编译好的入口，不再触发 npm run dist
+WORKDIR /app/dist
+EXPOSE 8000
+CMD ["node", "index.js"]
